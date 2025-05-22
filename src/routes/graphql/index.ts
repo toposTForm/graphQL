@@ -201,7 +201,7 @@ const queryType = new GraphQLObjectType({
 });
 
 
-
+////asdsadsa
 export const mainShema: GraphQLSchema = new GraphQLSchema({
   query: queryType,
   types: [memberType, postType, profileType, userType],
