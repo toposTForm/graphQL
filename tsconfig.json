@@ -1,0 +1,12 @@
+{
+  "extends": "fastify-tsconfig",
+  "compilerOptions": {
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "outDir": "dist",
+    "sourceMap": true,
+    "moduleResolution": "nodenext",
+    "module": "NodeNext"
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./database.db"
+}
+
+model User {
+  id      String @id @default(uuid())
+  name    String
+  balance Float
+
+  profile          Profile?
+  posts            Post[]
+  userSubscribedTo SubscribersOnAuthors[] @relation("subscriber")
+  subscribedToUser SubscribersOnAuthors[] @relation("author")
+}
+
+model SubscribersOnAuthors {
+  subscriber   User   @relation("subscriber", fields: [subscriberId], references: [id], onDelete: Cascade)
+  subscriberId String
+  author       User   @relation("author", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId     String
+
+  @@id([subscriberId, authorId])
+}
+
+model Profile {
+  id          String  @id @default(uuid())
+  isMale      Boolean
+  yearOfBirth Int
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String     @unique
+  memberType   MemberType @relation(fields: [memberTypeId], references: [id], onDelete: Restrict)
+  memberTypeId String
+}
+
+model Post {
+  id      String @id @default(uuid())
+  title   String
+  content String
+
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String
+}
+
+model MemberType {
+  id                 String @id
+  discount           Float
+  postsLimitPerMonth Int
+
+  profiles Profile[]
+}
