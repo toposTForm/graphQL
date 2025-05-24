@@ -11,6 +11,7 @@ import { postFields } from '../posts/schemas.js';
 import { UUIDType } from './types/uuid.js';
 import { profile } from 'node:console';
 import { resolve } from 'node:path';
+import { subscribe } from 'node:diagnostics_channel';
 
 
 const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
@@ -88,7 +89,20 @@ const userType = new GraphQLObjectType({
     profile: { type: profileType },    
     posts: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(postType))) },   
     userSubscribedTo: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(userType))) },
-    subscribedToUser: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(userType))) },
+    subscribedToUser: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(userType))), 
+      resolve: async (user, args, context) => {
+      let data = await context.prisma.user.findMany({
+          where: {
+            userSubscribedTo: {
+              some: {
+                authorId: user.id,
+              }
+            }
+          }
+        });
+        return data;
+      },
+    },
   })
 });
 
@@ -187,11 +201,23 @@ const queryType = new GraphQLObjectType({
       type: userType,
       args:{
         id: { type: UUIDType },
+        authorId: { type: UUIDType },
+        subscriberId: { type: UUIDType },
       },
       resolve: async (parent, args, context) => {
         let data = await context.prisma.user.findUnique({
           where: {
             id: args.id,
+          },
+          include: {
+            profile: {
+              include: {
+                memberType: true,
+              }
+            },
+            posts: true,
+            // userSubscribedTo: true,
+            // subscribedToUser: true,
           }
         });
         return data;
@@ -201,7 +227,7 @@ const queryType = new GraphQLObjectType({
 });
 
 
-////asdsadsa
+
 export const mainShema: GraphQLSchema = new GraphQLSchema({
   query: queryType,
   types: [memberType, postType, profileType, userType],
