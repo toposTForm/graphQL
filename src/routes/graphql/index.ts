@@ -9,13 +9,14 @@ import { MemberTypeId } from '../member-types/schemas.js';
 import { UUID } from 'node:crypto';
 import { postFields } from '../posts/schemas.js';
 import { UUIDType } from './types/uuid.js';
-import { error, profile } from 'node:console';
+import { error, info, profile } from 'node:console';
 import { resolve } from 'node:path';
 import { subscribe } from 'node:diagnostics_channel';
 import { describe } from 'node:test';
 import { create } from 'node:domain';
 import depthLimit from 'graphql-depth-limit';
 import { constrainedMemory } from 'node:process';
+import DataLoader from 'dataloader';
 
 
 
@@ -23,7 +24,6 @@ import { constrainedMemory } from 'node:process';
 
 const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
   const { prisma } = fastify;
-
   fastify.route({ 
     url: '/',
     method: 'POST',
@@ -38,11 +38,11 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
         ...specifiedRules,
           depthLimit(5)
       ];
-      let document;
+      let document: any;
       document = parse(req.body.query);
       const test = validate(mainShema, document, allValidationRules);
-      if(test.length == 1){
-        return {errors: test}
+      if(test.length >= 1){
+        return {errors: test};
       } 
      
       return graphql({
@@ -51,6 +51,7 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
         variableValues: req.body.variables,
         contextValue: {
           prisma,
+          dataloaders: new WeakMap(),
         },
       })
      
@@ -103,9 +104,58 @@ const userType = new GraphQLObjectType({
     id: { type: new GraphQLNonNull(UUIDType) },
     name: { type: new GraphQLNonNull(GraphQLString) },
     balance: { type: new GraphQLNonNull(GraphQLFloat) },
-    profile: { type: profileType },    
-    posts: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(postType))) },   
+    profile: { type: profileType, 
+      resolve: async (user, args, context, info) => {
+        const { dataloaders } = context;
+        let dataloader = dataloaders.get(info.fieldNodes);
+        if (!dataloader) {
+          dataloader = new DataLoader(async (keys) => {
+            const profiles = await context.prisma.profile.findMany({
+              where: { userId: { in: keys } },
+              include: {
+                memberType: true,
+              }
+            });
+            return keys.map(key => profiles.find(profile => profile.userId === key));
+          }
+          );
+          dataloaders.set(info.fieldNodes, dataloader);
+        }
+        return dataloader.load(user.id);
+     },    
+    },
+    posts: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(postType))),
+      resolve: async (user, args, context, info) => {
+        const { dataloaders } = context;
+        let dataloader = dataloaders.get(info.fieldNodes);
+        if (!dataloader) {
+          dataloader = new DataLoader(async (keys) => {
+            const posts = await context.prisma.post.findMany({
+              where: { authorId: { in: keys } },
+            });
+            return keys.map(key => posts.filter(post => post.authorId === key));
+          });
+          dataloaders.set(info.fieldNodes, dataloader);
+        }
+        return dataloader.load(user.id);
+     },   
+    },
     userSubscribedTo: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(userType))),
+      // resolve: async (user, argsToArgsConfig, context, info) => {
+      //   const { dataloaders } = context;
+      //   let dataloader = dataloaders.get(info.fieldNodes);
+      //   if (!dataloader) {
+      //    dataloader = new DataLoader(async (keys) => {
+      //       const posts = await context.prisma.user.findMany({
+      //         where: { authorId: { in: keys }, subscribedToUser: { some: { subscriberId: user.id } } },
+      //       });
+      //       return keys.map(key => posts.filter(post => post.authorId === key));
+      //     });
+      //     dataloaders.set(info.fieldNodes, dataloader);
+      //   }
+      //   let bla = dataloader.load(user.id);
+      //   return dataloader.load(user.id);
+      // }
       resolve: async (user, args, context) => {
          let data = await context.prisma.user.findMany({
           where: {
@@ -289,7 +339,30 @@ const queryType = new GraphQLObjectType({
     },
     users: {
       type: new GraphQLList(userType),
-      resolve: async (parent, args, context) => {
+      resolve: async (parent, args, context, info) => {
+        // const { dataloaders } = context;
+        // let dataloader = dataloaders.get(info.fieldNodes);
+        // if (!dataloader) {
+        //   dataloader = new DataLoader(async (keys) => {
+        //     const users = await context.prisma.user.findMany({
+        //       where: { id: { in: keys } },
+        //       include: {
+        //         profile: {
+        //           include: {
+        //             memberType: true,
+        //           }
+        //         },
+        //         posts: true,
+        //         userSubscribedTo: true,
+        //         subscribedToUser: true,
+        //       }
+        //     });
+        //     return keys.map(key => users.find(user => user.id === key));
+        //   });
+        //   dataloaders.set(info.fieldNodes, dataloader);
+        // }
+        // dataloader.loadMany([]);
+
         let data = await context.prisma.user.findMany({
           include: {
             profile: {
