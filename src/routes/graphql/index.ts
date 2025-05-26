@@ -19,30 +19,7 @@ import { constrainedMemory } from 'node:process';
 
 
 
-// export function executeGraphQLRequest(
-//   schema: GraphQLSchema,
-//   source: string,
-//   variableValues?: Record<string, any>,
-// ) {
-//   let document;
-//   try {
-//     document = parse(source);
-//   } catch (syntaxError) {
-//     return {
-//       errors: [syntaxError],
-//     };
-//   }
 
-
-//   const errors = validate(mainShema, document, allValidationRules);
-
-
-//   if (errors.length > 0) {
-//     return { errors };
-//   }
-
-//   return execute({ schema: mainShema, document, variableValues });
-// }
 
 const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
   const { prisma } = fastify;
@@ -64,7 +41,7 @@ const plugin: FastifyPluginAsyncTypebox = async (fastify) => {
       let document;
       document = parse(req.body.query);
       const test = validate(mainShema, document, allValidationRules);
-      if(test.length){
+      if(test.length == 1){
         return {errors: test}
       } 
      
